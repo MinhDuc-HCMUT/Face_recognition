@@ -22,6 +22,54 @@ def insertOrUpdate(id, name):
     conn.commit()
     conn.close()
 
+# Hàm xử lý thêm gương mặt mới
+def addFace(id, name, ser, cap, face_cascade):
+    sampleNum = 0  # Đếm số lượng ảnh đã capture
+
+    while True:
+        # Đọc dữ liệu từ webcam
+        ret, frame = cap.read()
+        if not ret:
+            print("Không thể truy cập webcam")
+            break
+
+        # Chuyển đổi sang ảnh xám
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        # Nhận diện khuôn mặt
+        faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+
+        # Vẽ hình chữ nhật xung quanh các khuôn mặt và lưu ảnh
+        for (x, y, w, h) in faces:
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+            # Tạo thư mục nếu chưa tồn tại
+            if not os.path.exists('dataSet'):
+                os.makedirs('dataSet')
+
+            # Lưu ảnh vào thư mục
+            sampleNum += 1
+            cv2.imwrite(f'dataSet/User.{id}.{sampleNum}.jpg', gray[y: y + h, x: x + w])
+
+        # Hiển thị khung hình
+        cv2.imshow('frame', frame)
+        cv2.waitKey(1)
+
+        # Kết thúc khi đủ 500 ảnh hoặc hết thời gian
+        if sampleNum >= 500:  # Timeout sau 60 giây
+            break
+
+    # Kiểm tra nếu đã capture đủ ảnh
+    if sampleNum >= 500:
+        print(f"Đã capture {sampleNum} ảnh cho ID: {id}. Bắt đầu huấn luyện lại mô hình...")
+        trainRecognizer()  # Huấn luyện lại mô hình
+        ser.write(b"True")  # Gửi tín hiệu thành công qua serial
+        print("Đã gửi: True")
+    else:
+        print("Capture không đủ ảnh hoặc hết thời gian!")
+        ser.write(b"False")  # Gửi tín hiệu thất bại qua serial
+        print("Đã gửi: False")
+
 def checkInDatabase(id, name):
     conn = sqlite3.connect("D:/DATN/test_serial/test_serial/data.db")
     query = "SELECT * FROM people WHERE ID=? AND Name=?"
@@ -162,12 +210,6 @@ sampleNum = 0
 id = None
 name = None
 
-# Biến theo dõi thời gian
-start_time = time.time()
-
-# Biến flag để kiểm soát capture ảnh
-capture_faces = False
-
 while True:
     # Kiểm tra dữ liệu từ serial
     if ser.in_waiting > 0:
@@ -183,11 +225,8 @@ while True:
                 print(f"Thêm/ cập nhật ID: {id}, Tên: {name}")
                 insertOrUpdate(id, name)
 
-                # Bật chế độ capture khi nhận Add.X
-                capture_faces = True
-
-                # Reset thời gian vì nhận được dữ liệu
-                start_time = time.time()
+                # Gọi hàm addFace để thêm gương mặt mới
+                addFace(id, name, ser, cap, face_cascade)
 
             except (ValueError, IndexError) as e:
                 print(f"Lỗi khi xử lý dữ liệu serial: {e}")
@@ -207,12 +246,6 @@ while True:
                 else:
                     ser.write(b"FALSE")  # Gửi "FALSE" qua serial
                     print("Dữ liệu không tồn tại trong DB, đã gửi: FALSE")
-
-                # Tắt chế độ capture khi nhận Che.X
-                capture_faces = False
-
-                # Reset thời gian vì nhận được dữ liệu
-                start_time = time.time()
 
             except (ValueError, IndexError) as e:
                 print(f"Lỗi khi xử lý dữ liệu serial: {e}")
@@ -257,47 +290,6 @@ while True:
             else:
                 ser.write(b"False")
                 print("Đã gửi: False")
-
-    # Nếu không nhận được dữ liệu trong 30 giây
-    if time.time() - start_time > 30:
-        ser.write(b"FALSE")  # Gửi "FALSE" qua serial khi hết thời gian chờ
-        print("Không nhận được dữ liệu trong 30 giây, đã gửi: FALSE")
-        break
-
-    # Chỉ capture nếu ID không phải None và capture_faces là True
-    if id is not None and capture_faces:
-        # Đọc dữ liệu từ webcam
-        ret, frame = cap.read()
-        if not ret:
-            print("Không thể truy cập webcam")
-            break
-
-        # Chuyển dữ liệu ảnh đầu vào thành ảnh xám
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-        # Gọi hàm nhận diện gương mặt
-        faces = face_cascade.detectMultiScale(gray, 1.3, 5)
-
-        # Vẽ hình chữ nhật quanh các khuôn mặt phát hiện được
-        for (x, y, w, h) in faces:
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-
-            if not os.path.exists('dataSet'):
-                os.makedirs('dataSet')
-
-            sampleNum += 1
-            cv2.imwrite('dataSet/User.' + str(id) + "." + str(sampleNum) + ".jpg", gray[y: y + h, x: x + w])
-
-        cv2.imshow('frame', frame)
-        cv2.waitKey(1)
-
-        if sampleNum > 499:
-            # Gửi xác nhận "True" qua serial
-            # Huấn luyện lại mô hình khi thêm dữ liệu
-            trainRecognizer()
-            ser.write(b"True")
-            print("Đã gửi: True")
-            break
 
 cap.release()
 cv2.destroyAllWindows()
