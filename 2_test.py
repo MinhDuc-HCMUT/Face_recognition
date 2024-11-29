@@ -192,7 +192,7 @@ while True:
             except (ValueError, IndexError) as e:
                 print(f"Lỗi khi xử lý dữ liệu serial: {e}")
 
-        elif serial_data.startswith("Check."):
+        elif serial_data.startswith("Che."):
             try:
                 # Làm sạch dữ liệu và lấy ID
                 clean_data = serial_data.replace("\x00", "").strip()
@@ -217,7 +217,7 @@ while True:
             except (ValueError, IndexError) as e:
                 print(f"Lỗi khi xử lý dữ liệu serial: {e}")
 
-        elif serial_data.startswith("Remove."):
+        elif serial_data.startswith("Rem."):
             try:
                 # Làm sạch dữ liệu và lấy ID
                 clean_data = serial_data.replace("\x00", "").strip()
@@ -237,12 +237,15 @@ while True:
                     print("Đã gửi: False")
 
                 #Huấn luyện lại mô hình khi xóa dữ liệu
-                trainRecognizer()
+                if os.listdir('dataSet'):  # Kiểm tra thư mục còn dữ liệu hay không
+                    trainRecognizer()
+                else:
+                    createFakeTrainingData()  # Tạo tệp mô hình giả nếu không còn dữ liệu
 
             except (ValueError, IndexError) as e:
                 print(f"Lỗi khi xử lý dữ liệu serial: {e}")
 
-        elif serial_data == "Delete.ALL":
+        elif serial_data == "Del.ALL":
             print("Yêu cầu xóa tất cả dữ liệu...")
             # Xóa tất cả ảnh và dữ liệu trong database
             success = deleteAllData()
