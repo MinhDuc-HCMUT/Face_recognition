@@ -4,6 +4,7 @@ import sqlite3
 import os
 import serial
 import time  # Thư viện để quản lý thời gian
+from PIL import Image
 
 def insertOrUpdate(id, name):
     conn = sqlite3.connect("D:/DATN/test_serial/test_serial/data.db")
@@ -59,6 +60,8 @@ def deleteData(id, name):
         print(f"Lỗi khi xóa dữ liệu: {e}")
         return False  # Trả về False nếu có lỗi
 
+
+# Hàm xóa tất cả dữ liệu người dùng và ảnh, tạo tệp mô hình giả
 def deleteAllData():
     try:
         # Xóa tất cả ảnh .jpg trong thư mục dataSet
@@ -83,10 +86,66 @@ def deleteAllData():
         conn.close()
 
         print("Đã xóa tất cả dữ liệu trong cơ sở dữ liệu.")
+
+        # Tạo tệp trainingData.yml giả
+        createFakeTrainingData()
+
         return True  # Trả về True nếu xóa thành công
     except Exception as e:
         print(f"Lỗi khi xóa dữ liệu: {e}")
         return False  # Trả về False nếu có lỗi
+
+
+# Hàm tạo tệp trainingData.yml giả (dữ liệu không hợp lệ)
+def createFakeTrainingData():
+    # Tạo dữ liệu giả (ID = -1, không có ảnh thực tế)
+    faces = [np.zeros((100, 100), dtype=np.uint8)]  # Ảnh trắng kích thước 100x100
+    IDs = [-1]  # ID giả
+
+    # Huấn luyện mô hình với dữ liệu giả
+    recognizer = cv2.face.LBPHFaceRecognizer_create()
+    recognizer.train(faces, np.array(IDs))
+
+    # Lưu mô hình giả vào tệp trainingData.yml
+    if not os.path.exists('recognizer'):
+        os.makedirs('recognizer')
+
+    recognizer.save('recognizer/trainingData.yml')
+    print("Đã tạo tệp trainingData.yml giả!")
+
+
+# Hàm lấy ảnh và ID từ thư mục dataSet
+def getImageWithID(path):
+    imagePaths = [os.path.join(path, f) for f in os.listdir(path)]
+    faces = []
+    IDs = []
+    for imagePath in imagePaths:
+        faceImg = Image.open(imagePath).convert('L')
+        faceNp = np.array(faceImg, 'uint8')
+        print(faceNp)
+        Id = int(imagePath.split('\\')[1].split('.')[1])
+        faces.append(faceNp)
+        IDs.append(Id)
+        cv2.imshow('training', faceNp)
+        cv2.waitKey(10)
+    return faces, IDs
+
+
+# Hàm huấn luyện lại mô hình nhận diện gương mặt
+def trainRecognizer():
+    # Đọc dữ liệu từ thư mục 'dataSet'
+    faces, IDs = getImageWithID('dataSet')
+
+    # Huấn luyện lại mô hình nhận diện
+    recognizer = cv2.face.LBPHFaceRecognizer_create()
+    recognizer.train(faces, np.array(IDs))
+
+    # Lưu lại mô hình nhận diện
+    if not os.path.exists('recognizer'):
+        os.makedirs('recognizer')
+
+    recognizer.save('recognizer/trainingData.yml')
+    print("Huấn luyện lại mô hình thành công và đã lưu!")
 
 # Cấu hình serial
 serial_port = "COM12"  # Thay bằng cổng serial của bạn
@@ -177,6 +236,9 @@ while True:
                     ser.write(b"False")
                     print("Đã gửi: False")
 
+                #Huấn luyện lại mô hình khi xóa dữ liệu
+                trainRecognizer()
+
             except (ValueError, IndexError) as e:
                 print(f"Lỗi khi xử lý dữ liệu serial: {e}")
 
@@ -228,6 +290,8 @@ while True:
 
         if sampleNum > 499:
             # Gửi xác nhận "True" qua serial
+            # Huấn luyện lại mô hình khi thêm dữ liệu
+            trainRecognizer()
             ser.write(b"True")
             print("Đã gửi: True")
             break
